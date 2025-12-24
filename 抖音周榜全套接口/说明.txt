@@ -1,0 +1,21 @@
+index.html是文档 搜索http://api.kkjsz.cn/douyin/替换成你自己搭建的域名
+
+
+userinfo.php是主页信息解析
+
+subscribe.php是周榜啥的解析
+
+qrcode_url.php是二维码获取，也可以获取隐藏的用户名和ip归属
+
+
+调用：
+第一先用分享主包的链接进行解析拿到author_id
+        http://127.0.0.1/userinfo.php?url=https://www.douyin.com/user/MS4wLjABAAAAPIPk75n6WRovyAE-FQRQfAsL0MwJxJVIwUpKrMJCWyIJofgJtOjH0Qe7dL48Fcap
+        
+第二用第一个接口返回的author_id进行解析获取周榜啥的(rank_type:1:本周榜 2:上周榜 3:今年榜)
+        http://127.0.0.1/subscribe.php?author_id=1805844061108371&rank_type=3
+        
+第三用第二个接口返回的数据选择要解析的用户sec_user_id进行获取share_qrcode_url得二维码
+        http://127.0.0.1/qrcode_url.php?sec_user_id=MS4wLjABAAAABBfmGuCLPobQCxEFBH7R7yCG94Gu19wQklcbTz6Q8Do
+        
+        

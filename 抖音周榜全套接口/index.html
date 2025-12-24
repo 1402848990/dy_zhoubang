@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抖音用户信息查询接口文档</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/twitter-bootstrap/5.1.3/css/bootstrap.min.css"
+        rel="stylesheet">
+    <!-- Prism CSS for code highlighting -->
+    <link href="https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"
+        rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+        rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #ff0050;
+            --secondary-color: #25f4ee;
+            --dark-color: #121212;
+            --light-color: #f8f9fa;
+            --gray-color: #6c757d;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            border-radius: 0 0 20px 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .header .lead {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .api-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            border-left: 5px solid var(--primary-color);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .api-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+        }
+
+        .api-card h3 {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .api-card .method {
+            display: inline-block;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-right: 0.5rem;
+        }
+
+        .endpoint {
+            font-family: 'Courier New', monospace;
+            background-color: #f8f9fa;
+            padding: 0.75rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+            border-left: 4px solid var(--secondary-color);
+            word-break: break-all;
+        }
+
+        .param-table {
+            width: 100%;
+            margin: 1.5rem 0;
+        }
+
+        .param-table th {
+            background-color: #f1f3f5;
+            font-weight: 600;
+            padding: 0.75rem;
+        }
+
+        .param-table td {
+            padding: 0.75rem;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .section-title {
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 0.5rem;
+            margin: 2rem 0 1rem;
+            color: var(--dark-color);
+            font-weight: 600;
+        }
+
+        .demo-section {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-top: 2rem;
+        }
+
+        .demo-section h3 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+        }
+
+        .response-area {
+            max-height: 400px;
+            overflow-y: auto;
+            border-radius: 8px;
+            background-color: #2d2d2d;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .footer {
+            background-color: var(--dark-color);
+            color: white;
+            padding: 2rem 0;
+            margin-top: 3rem;
+            text-align: center;
+        }
+
+        .pre-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .copy-btn {
+            background-color: #e9ecef;
+            border: none;
+            border-radius: 4px;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .copy-btn:hover {
+            background-color: #dee2e6;
+        }
+
+        .badge {
+            margin-right: 0.5rem;
+        }
+
+        /* 响应结果弹窗样式 */
+        .response-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+
+        .response-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .response-content {
+            background-color: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transform: translateY(20px);
+            transition: transform 0.3s;
+        }
+
+        .response-modal.show .response-content {
+            transform: translateY(0);
+        }
+
+        .response-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .response-header h4 {
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+        }
+
+        .close-btn:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .response-body {
+            padding: 1.5rem;
+            flex: 1;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+        }
+
+        .response-info {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background-color: white;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+
+        .response-info h5 {
+            color: #007bff;
+            margin-bottom: 0.5rem;
+        }
+
+        .response-data {
+            background-color: #2d2d2d;
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-x: auto;
+        }
+
+        .response-footer {
+            padding: 1rem 1.5rem;
+            background-color: white;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .btn-close-modal {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 4px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn-close-modal:hover {
+            background-color: #e00046;
+        }
+
+        .btn-copy-response {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 4px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-right: 0.75rem;
+            transition: background-color 0.2s;
+        }
+
+        .btn-copy-response:hover {
+            background-color: #5a6268;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-left: 0.75rem;
+        }
+
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 1.5rem 0;
+            }
+
+            .api-card {
+                padding: 1rem;
+            }
+
+            .demo-section {
+                padding: 1.5rem;
+            }
+
+            .response-content {
+                width: 95%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <h1><i class="fas fa-code me-2"></i>抖音用户信息查询接口文档</h1>
+            <p class="lead">提供抖音用户信息解析、粉丝排行榜查询和用户详细信息获取的API接口</p>
+            <div class="mt-3">
+                <span class="badge bg-light text-dark me-2"><i class="fas fa-lock me-1"></i> 本地部署</span>
+                <span class="badge bg-light text-dark me-2"><i class="fas fa-bolt me-1"></i> 快速响应</span>
+                <span class="badge bg-light text-dark"><i class="fas fa-json me-1"></i> JSON格式</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- API介绍 -->
+        <section class="mb-5">
+            <h2 class="section-title">接口概览</h2>
+            <p>本系统提供三个核心API接口，用于获取抖音用户的相关信息。所有接口均返回JSON格式数据，支持HTTP GET请求方式。</p>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="api-card text-center h-100">
+                        <i class="fas fa-user-circle fa-3x mb-3" style="color: var(--primary-color);"></i>
+                        <h4>用户信息解析</h4>
+                        <p>通过抖音分享链接解析用户基本信息，如昵称、ID、头像等。</p>
+                        <span class="badge bg-primary">接口一</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="api-card text-center h-100">
+                        <i class="fas fa-chart-line fa-3x mb-3" style="color: var(--secondary-color);"></i>
+                        <h4>粉丝排行榜</h4>
+                        <p>获取指定作者的粉丝贡献排行榜，包含排名和贡献值信息。</p>
+                        <span class="badge bg-success">接口二</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="api-card text-center h-100">
+                        <i class="fas fa-qrcode fa-3x mb-3" style="color: var(--primary-color);"></i>
+                        <h4>用户详情</h4>
+                        <p>通过sec_uid获取用户详细信息，包括分享二维码和完整资料。</p>
+                        <span class="badge bg-info">接口三</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- API接口详情 -->
+        <section class="mb-5">
+            <h2 class="section-title">接口详情</h2>
+
+            <!-- 接口一 -->
+            <div class="api-card">
+                <h3><span class="method">GET</span> 用户信息解析接口</h3>
+                <p class="mb-2">通过抖音用户分享链接解析用户基本信息。</p>
+
+                <div class="endpoint">http://api.kkjsz.cn/douyin/userinfo.php?url=<strong>{抖音分享链接}</strong></div>
+
+                <h5 class="mt-4">请求参数</h5>
+                <table class="param-table table table-striped">
+                    <thead>
+                        <tr>
+                            <th width="20%">参数名</th>
+                            <th width="15%">类型</th>
+                            <th width="15%">是否必需</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>url</code></td>
+                            <td>String</td>
+                            <td>是</td>
+                            <td>抖音用户分享链接，例如：<code>https://www.douyin.com/user/MS4wLjABAAAAPIPk75n6WRovyAE-FQRQfAsL0MwJxJVIwUpKrMJCWyIJofgJtOjH0Qe7dL48Fcap</code>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h5>响应示例</h5>
+                <div class="pre-title">
+                    <span>成功响应 (200)</span>
+                    <button class="copy-btn" onclick="copyCode('resp1')"><i class="far fa-copy me-1"></i>复制</button>
+                </div>
+                <pre id="resp1" class="response-area"><code class="language-json">{
+    "code": 200,
+    "msg": "解析成功",
+    "sec_uid": "MS4wLjABAAAAPIPk75n6WRovyAE-FQRQfAsL0MwJxJVIwUpKrMJCWyIJofgJtOjH0Qe7dL48Fcap",
+    "data": {
+        "id": "MS4wLjABAAAAPIPk75n6WRovyAE-FQRQfAsL0MwJxJVIwUpKrMJCWyIJofgJtOjH0Qe7dL48Fcap",
+        "nickname": "瑶瑶de会员店",
+        "enterprise_verify_reason": "丹阳市开发区奶瑶文化传媒工作室（个体工商户）",
+        "author_id": "1805844061108371",
+        "unique_id": "China520eternal",
+        "avatar": "https://p26.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_e4599fc0b3e160afb02bf4d77f135dc1.jpeg",
+        "avatar_small": "https://p3.douyinpic.com/img/aweme-avatar/tos-cn-avt-0015_e4599fc0b3e160afb02bf4d77f135dc1~c5_168x168.webp",
+        "short_id": "74128424018",
+        "signature": "🍧好友位🚪在下方⬇️抖音专属会员\n🍧今日🈶福利（300钻会员档即可）\n🍧会员宝宝永久更新呐（免费）"
+    }
+}</code></pre>
+
+                <h5 class="mt-4">关键返回字段说明</h5>
+                <table class="param-table table">
+                    <thead>
+                        <tr>
+                            <th width="25%">字段</th>
+                            <th width="15%">类型</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>data.author_id</code></td>
+                            <td>String</td>
+                            <td>作者ID，用于接口二的请求参数</td>
+                        </tr>
+                        <tr>
+                            <td><code>data.sec_uid</code></td>
+                            <td>String</td>
+                            <td>用户安全ID，用于接口三的请求参数</td>
+                        </tr>
+                        <tr>
+                            <td><code>data.unique_id</code></td>
+                            <td>String</td>
+                            <td>抖音唯一ID（用户名）</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 接口二 -->
+            <div class="api-card">
+                <h3><span class="method">GET</span> 周榜等接口</h3>
+                <p class="mb-2">获取指定作者的粉丝贡献排行榜。</p>
+
+                <div class="endpoint">
+                    http://api.kkjsz.cn/douyin/subscribe.php?author_id=<strong>{author_id}</strong>&rank_type=<strong>{rank_type}</strong>
+                </div>
+
+                <h5 class="mt-4">请求参数</h5>
+                <table class="param-table table table-striped">
+                    <thead>
+                        <tr>
+                            <th width="20%">参数名</th>
+                            <th width="15%">类型</th>
+                            <th width="15%">是否必需</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>author_id</code></td>
+                            <td>String</td>
+                            <td>是</td>
+                            <td>作者ID，从接口一的<code>data.author_id</code>获取</td>
+                        </tr>
+                        <tr>
+                            <td><code>rank_type</code></td>
+                            <td>Integer</td>
+                            <td>是</td>
+                            <td>排行榜类型，示例中使用的是<code>1</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h5>响应示例（节选）</h5>
+                <div class="pre-title">
+                    <span>成功响应 (200)</span>
+                    <button class="copy-btn" onclick="copyCode('resp2')"><i class="far fa-copy me-1"></i>复制</button>
+                </div>
+                <pre id="resp2" class="response-area"><code class="language-json">{
+    "self_rank": {
+        "user": {
+            "uid": 4229184618762131,
+            "avatar": { ... },
+            "nickname": "笒鬼鬼",
+            "sec_uid": "MS4wLjABAAAAVD5P6sSrk63XzjJT2n_3SQTzfg6xeHZEtY8q-gOoRaIdWQe1GVc14zkfspecr6YY"
+        },
+        "score": 0,
+        "score_str": "0",
+        "rank": 0
+    },
+    "rank_list": [
+        {
+            "user": {
+                "uid": 0,
+                "avatar": { ... },
+                "nickname": "咸***",
+                "sec_uid": "MS4wLjABAAAAzoCxmUjtzDVacKEkXW7x5kUqWsnqQhh6MSitMoiQWlDaggWB660LTjbQrCWyyKcS"
+            },
+            "score": 1,
+            "score_str": "1",
+            "rank": 1
+        },
+        // ... 更多排行榜数据
+    ],
+    "has_more": false
+}</code></pre>
+
+                <h5 class="mt-4">关键返回字段说明</h5>
+                <table class="param-table table">
+                    <thead>
+                        <tr>
+                            <th width="25%">字段</th>
+                            <th width="15%">类型</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>rank_list[n].user.sec_uid</code></td>
+                            <td>String</td>
+                            <td>粉丝用户的安全ID，用于接口三的请求参数</td>
+                        </tr>
+                        <tr>
+                            <td><code>rank_list[n].rank</code></td>
+                            <td>Integer</td>
+                            <td>粉丝排名</td>
+                        </tr>
+                        <tr>
+                            <td><code>rank_list[n].score</code></td>
+                            <td>Integer</td>
+                            <td>粉丝贡献值</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 接口三 -->
+            <div class="api-card">
+                <h3><span class="method">GET</span> 二维码,用户名,ip归属获取</h3>
+                <p class="mb-2">通过sec_uid获取用户详细信息，包括分享二维码。</p>
+
+                <div class="endpoint">http://api.kkjsz.cn/douyin/qrcode_url.php?sec_user_id=<strong>{sec_uid}</strong>
+                </div>
+
+                <h5 class="mt-4">请求参数</h5>
+                <table class="param-table table table-striped">
+                    <thead>
+                        <tr>
+                            <th width="20%">参数名</th>
+                            <th width="15%">类型</th>
+                            <th width="15%">是否必需</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>sec_user_id</code></td>
+                            <td>String</td>
+                            <td>是</td>
+                            <td>用户安全ID，从接口一的<code>sec_uid</code>或接口二的<code>rank_list[n].user.sec_uid</code>获取</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h5>响应示例（节选）</h5>
+                <div class="pre-title">
+                    <span>成功响应 (200)</span>
+                    <button class="copy-btn" onclick="copyCode('resp3')"><i class="far fa-copy me-1"></i>复制</button>
+                </div>
+                <pre id="resp3" class="response-area"><code class="language-json">{
+    "status_code": 0,
+    "user": {
+        "sec_uid": "MS4wLjABAAAABBfmGuCLPobQCxEFBH7R7yCG94Gu19wQklcbTz6Q8Do",
+        "uid": "101886702649",
+        "nickname": "许久不见！？",
+        "avatar_larger": {
+            "url_list": [
+                "https://p3-pc.douyinpic.com/aweme/1080x1080/9b970015216c334cb90c.jpeg"
+            ]
+        },
+        "signature": "",
+        "ip_location": "IP属地：江苏",
+        "follower_count": 25,
+        "following_count": 549,
+        "share_info": {
+            "share_qrcode_url": {
+                "url_list": [
+                    "https://p26.douyinpic.com/obj/9ba90007156e8fee6ff8"
+                ]
+            },
+            "share_url": "www.iesdouyin.com/share/user/MS4wLjABAAAABBfmGuCLPobQCxEFBH7R7yCG94Gu19wQklcbTz6Q8Do"
+        }
+    }
+}</code></pre>
+
+                <h5 class="mt-4">关键返回字段说明</h5>
+                <table class="param-table table">
+                    <thead>
+                        <tr>
+                            <th width="25%">字段</th>
+                            <th width="15%">类型</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>user.share_info.share_qrcode_url</code></td>
+                            <td>Object</td>
+                            <td>用户分享二维码图片URL</td>
+                        </tr>
+                        <tr>
+                            <td><code>user.share_info.share_url</code></td>
+                            <td>String</td>
+                            <td>用户分享链接</td>
+                        </tr>
+                        <tr>
+                            <td><code>user.follower_count</code></td>
+                            <td>Integer</td>
+                            <td>粉丝数量</td>
+                        </tr>
+                        <tr>
+                            <td><code>user.ip_location</code></td>
+                            <td>String</td>
+                            <td>IP属地信息</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- 接口调用流程 -->
+        <section class="mb-5">
+            <h2 class="section-title">接口调用流程</h2>
+            <div class="api-card">
+                <div class="row">
+                    <div class="col-md-4 text-center">
+                        <div class="mb-3">
+                            <div class="rounded-circle bg-primary d-inline-flex align-items-center justify-content-center"
+                                style="width: 60px; height: 60px;">
+                                <i class="fas fa-link fa-lg text-white"></i>
+                            </div>
+                        </div>
+                        <h5>1. 获取用户基本信息</h5>
+                        <p>使用抖音分享链接调用接口一，获取用户的<code>author_id</code>和<code>sec_uid</code></p>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="mb-3">
+                            <div class="rounded-circle bg-success d-inline-flex align-items-center justify-content-center"
+                                style="width: 60px; height: 60px;">
+                                <i class="fas fa-trophy fa-lg text-white"></i>
+                            </div>
+                        </div>
+                        <h5>2. 查询粉丝排行榜</h5>
+                        <p>使用<code>author_id</code>调用接口二，获取粉丝贡献排行榜</p>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="mb-3">
+                            <div class="rounded-circle bg-info d-inline-flex align-items-center justify-content-center"
+                                style="width: 60px; height: 60px;">
+                                <i class="fas fa-user fa-lg text-white"></i>
+                            </div>
+                        </div>
+                        <h5>3. 获取用户详情</h5>
+                        <p>使用<code>sec_uid</code>调用接口三，获取用户详细信息和分享二维码</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 演示区域 -->
+        <section class="demo-section">
+            <h3><i class="fas fa-play-circle me-2"></i>接口演示</h3>
+            <p>选择以下示例数据体验接口调用流程：</p>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">示例1：瑶瑶de会员店</h5>
+                            <p class="card-text">一个抖音店铺账号，包含企业认证信息。</p>
+                            <ul class="list-unstyled">
+                                <li><strong>分享链接：</strong>https://www.douyin.com/user/MS4wLjABAAAAPIPk75n6WRovyAE-FQRQfAsL0MwJxJVIwUpKrMJCWyIJofgJtOjH0Qe7dL48Fcap
+                                </li>
+                                <li><strong>author_id：</strong>1805844061108371</li>
+                                <li><strong>sec_uid：</strong>MS4wLjABAAAAPIPk75n6WRovyAE-FQRQfAsL0MwJxJVIwUpKrMJCWyIJofgJtOjH0Qe7dL48Fcap
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">示例2：许久不见！？</h5>
+                            <p class="card-text">一个普通抖音用户，可获取分享二维码。</p>
+                            <ul class="list-unstyled">
+                                <li><strong>sec_uid：</strong>MS4wLjABAAAABBfmGuCLPobQCxEFBH7R7yCG94Gu19wQklcbTz6Q8Do
+                                </li>
+                                <li><strong>粉丝数：</strong>25</li>
+                                <li><strong>关注数：</strong>549</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+        </section>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 抖音用户信息查询接口文档 | 本地API服务</p>
+        </div>
+    </footer>
+
+
+
+    <script>
+        // 复制代码功能
+        function copyCode(elementId) {
+            const codeElement = document.getElementById(elementId);
+            const textArea = document.createElement('textarea');
+            textArea.value = codeElement.textContent;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+
+            // 显示复制成功提示
+            const btn = event.target.closest('.copy-btn');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check me-1"></i>已复制';
+            btn.style.backgroundColor = '#d4edda';
+            btn.style.color = '#155724';
+
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+                btn.style.backgroundColor = '';
+                btn.style.color = '';
+            }, 2000);
+        }
+
+    </script>
+</body>
+
+</html>
