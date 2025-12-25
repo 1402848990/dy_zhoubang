@@ -40,6 +40,19 @@ MAX_WORKERS_DEFAULT = 5  # 并发处理链接数量
 CONFIG_FILE = "gui_config.json"
 
 
+# 代理相关配置
+# 隧道域名:端口号
+tunnel = "y686.kdltps.com:15818"
+
+# 用户名密码方式
+username = "t16668608982735"
+password = "fiq6dowg"
+proxies = {
+    "http": "http://%(user)s:%(pwd)s@%(proxy)s/" % {"user": username, "pwd": password, "proxy": tunnel},
+    "https": "http://%(user)s:%(pwd)s@%(proxy)s/" % {"user": username, "pwd": password, "proxy": tunnel}
+}
+
+
 class DouyinGUI:
     def __init__(self, master):
         self.master = master
@@ -53,6 +66,10 @@ class DouyinGUI:
         self.is_polling = False  # 轮询状态标志
         self.poll_thread = None  # 轮询线程
         self.url_to_author_id = {}  # URL 到 author_id 的映射缓存
+        
+        # 代理请求频率限制（每秒最多5次）
+        self.proxy_request_lock = threading.Lock()
+        self.proxy_request_times = []  # 记录最近请求的时间戳
 
         # 加载保存的配置
         self.load_config()
@@ -123,9 +140,10 @@ class DouyinGUI:
         scrollbar_urls = ttk.Scrollbar(frm_input)
         scrollbar_urls.pack(side=RIGHT, fill=Y)
 
-        self.txt_urls = ttk.Text(frm_input, height=10, wrap="word", yscrollcommand=scrollbar_urls.set)
+        self.txt_urls = ttk.Text(
+            frm_input, height=10, wrap="word", yscrollcommand=scrollbar_urls.set)
         self.txt_urls.pack(side=LEFT, fill=BOTH, expand=True)
-        
+
         # 关联滚动条和文本框
         scrollbar_urls.config(command=self.txt_urls.yview)
 
@@ -144,11 +162,11 @@ class DouyinGUI:
         ttk.Button(frm_btn, text="清空日志", bootstyle=SECONDARY, command=self.clear_log).pack(
             side=LEFT, padx=(10, 0)
         )
-        
+
         # 轮询控制区域
         frm_poll = ttk.Frame(frm_btn)
         frm_poll.pack(side=LEFT, padx=(20, 0))
-        
+
         ttk.Label(frm_poll, text="轮询间隔(秒):").pack(side=LEFT, padx=(0, 5))
         ttk.Spinbox(
             frm_poll,
@@ -157,12 +175,12 @@ class DouyinGUI:
             textvariable=self.poll_interval,
             width=8,
         ).pack(side=LEFT, padx=(0, 10))
-        
+
         self.btn_start_poll = ttk.Button(
             frm_poll, text="开始监听", bootstyle=INFO, command=self.start_polling
         )
         self.btn_start_poll.pack(side=LEFT, padx=(0, 5))
-        
+
         self.btn_stop_poll = ttk.Button(
             frm_poll, text="停止监听", bootstyle=DANGER, command=self.stop_polling, state=DISABLED
         )
@@ -176,9 +194,10 @@ class DouyinGUI:
         scrollbar_log = ttk.Scrollbar(frm_log)
         scrollbar_log.pack(side=RIGHT, fill=Y)
 
-        self.txt_log = ttk.Text(frm_log, height=20, wrap="word", yscrollcommand=scrollbar_log.set)
+        self.txt_log = ttk.Text(
+            frm_log, height=20, wrap="word", yscrollcommand=scrollbar_log.set)
         self.txt_log.pack(side=LEFT, fill=BOTH, expand=True)
-        
+
         # 关联滚动条和文本框
         scrollbar_log.config(command=self.txt_log.yview)
 
@@ -255,10 +274,10 @@ class DouyinGUI:
             if os.path.exists(CONFIG_FILE):
                 with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                     config = json.load(f)
-            
+
             # 更新缓存部分
             config['url_to_author_id'] = self.url_to_author_id
-            
+
             # 保存配置
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)
@@ -379,6 +398,7 @@ class DouyinGUI:
             qr_base64: 二维码 base64 数据
         """
         try:
+            global proxies
             # 创建保存目录
             base_dir = Path(self.save_dir.get().strip() or "qrcodes")
             author_dir = base_dir / self.clean_filename(author_nickname)
@@ -403,7 +423,8 @@ class DouyinGUI:
                 success = False
                 while retry_count <= max_retries and not success:
                     try:
-                        resp = requests.get(qr_url, timeout=30, verify=False)
+                        resp = requests.get(
+                            qr_url, timeout=30, verify=False)
                         resp.raise_for_status()
                         png_path.write_bytes(resp.content)
                         self.log(
@@ -490,10 +511,10 @@ class DouyinGUI:
         self.is_polling = True
         self.btn_start_poll.config(state=DISABLED)
         self.btn_stop_poll.config(state=NORMAL)
-        
+
         interval = max(10, self.poll_interval.get())  # 最少10秒
         self.log(f"开始定时轮询，间隔 {interval} 秒")
-        
+
         # 启动轮询线程
         self.poll_thread = threading.Thread(
             target=self._polling_loop,
@@ -506,7 +527,7 @@ class DouyinGUI:
         """停止定时轮询"""
         if not self.is_polling:
             return
-        
+
         self.is_polling = False
         self.btn_start_poll.config(state=NORMAL)
         self.btn_stop_poll.config(state=DISABLED)
@@ -516,16 +537,16 @@ class DouyinGUI:
         """轮询循环"""
         api_base = self.api_base.get().rstrip("/")
         rank_type = "1"  # 固定使用本周榜
-        
+
         # 获取用户输入的 Cookie 并自动拆分
         cookie_input = self.cookie_input.get().strip()
         cookie_subscribe, cookie_web = self.split_cookie(cookie_input)
-        
+
         round_count = 0
         while self.is_polling:
             round_count += 1
             self.log(f"\n========== 第 {round_count} 轮轮询开始 ==========")
-            
+
             # 如果缓存中有数据，直接使用缓存；否则第一次轮询需要请求 userinfo 获取 author_id
             # 后续轮询都使用缓存，跳过 userinfo 请求
             has_cache = any(url in self.url_to_author_id for url in url_list)
@@ -535,20 +556,21 @@ class DouyinGUI:
                     self.log("检测到本地缓存，使用缓存的 author_id，跳过 userinfo 请求")
                 elif round_count > 1:
                     self.log("使用缓存的 author_id，跳过 userinfo 请求")
-            
+
             # 执行一次完整的任务流程
-            self.run_workflow(api_base, rank_type, url_list, cookie_subscribe, cookie_web, skip_userinfo=skip_userinfo)
-            
+            self.run_workflow(api_base, rank_type, url_list,
+                              cookie_subscribe, cookie_web, skip_userinfo=skip_userinfo)
+
             if not self.is_polling:
                 break
-            
+
             # 等待指定间隔时间
             self.log(f"等待 {interval} 秒后进行下一轮轮询...")
             for _ in range(interval):
                 if not self.is_polling:
                     break
                 threading.Event().wait(1)  # 每秒检查一次状态
-        
+
         self.log("轮询循环已结束")
 
     # 主要的任务处理
@@ -556,14 +578,16 @@ class DouyinGUI:
     def run_workflow(self, api_base: str, rank_type: str, url_list: list[str], cookie_subscribe: str, cookie_web: str, skip_userinfo: bool = False):
         # 并发处理每个链接（单个链接内部仍串行）
         max_workers = max(1, min(self.max_workers.get(), 20))
-        
+
         # 检查缓存情况
-        cached_count = sum(1 for url in url_list if url in self.url_to_author_id)
+        cached_count = sum(
+            1 for url in url_list if url in self.url_to_author_id)
         if cached_count > 0:
             self.log(f"检测到 {cached_count}/{len(url_list)} 个链接有缓存，将优先使用缓存")
-        
+
         if skip_userinfo:
-            self.log(f"开始处理 {len(url_list)} 个链接（轮询模式，跳过 userinfo 请求），最大并发 {max_workers}")
+            self.log(
+                f"开始处理 {len(url_list)} 个链接（轮询模式，跳过 userinfo 请求），最大并发 {max_workers}")
         else:
             self.log(f"开始处理 {len(url_list)} 个链接，最大并发 {max_workers}")
 
@@ -580,7 +604,7 @@ class DouyinGUI:
                 elif skip_userinfo:
                     # 如果要求跳过 userinfo 但缓存中没有，记录警告
                     self.log(f"[警告] URL {user_url} 在缓存中不存在，但要求跳过 userinfo 请求")
-                
+
                 futures.append(
                     executor.submit(self.process_single_url, idx, user_url,
                                     api_base, rank_type, cookie_subscribe, cookie_web,
@@ -604,7 +628,8 @@ class DouyinGUI:
         if cached_author_id and cached_author_nickname:
             author_id = cached_author_id
             author_nickname = cached_author_nickname
-            self.log(f"[用户信息] 使用缓存的 author_id={author_id}, 博主昵称={author_nickname}（跳过 userinfo 请求）")
+            self.log(
+                f"[用户信息] 使用缓存的 author_id={author_id}, 博主昵称={author_nickname}（跳过 userinfo 请求）")
         else:
             userinfo_url = f"{api_base}/userinfo"
             try:
@@ -627,14 +652,15 @@ class DouyinGUI:
                 return
 
             author_id = user_data.get("data", {}).get("author_id")
-            author_nickname = user_data.get("data", {}).get("nickname", "unknown")
+            author_nickname = user_data.get(
+                "data", {}).get("nickname", "unknown")
             self.log(f"[用户信息] author_id={author_id}, 博主昵称={author_nickname}")
             print(f"[用户信息] author_id={author_id}")
 
             if not author_id:
                 self.log("[用户信息] 未获取到 author_id，跳过此链接")
                 return
-            
+
             # 保存到缓存
             self.url_to_author_id[user_url] = {
                 'author_id': author_id,
@@ -669,9 +695,9 @@ class DouyinGUI:
         max_rank_workers = min(5, len(rank_list)) or 1
 
         def fetch_qr(item):
-            
+
             # print('====itrm====', item.get("user", {}))
-            
+
             sec_uid = (
                 item.get("user", {}).get("sec_uid")
                 if isinstance(item, dict)
@@ -701,8 +727,8 @@ class DouyinGUI:
                     f"[缓存] rank={rank_no} nickname={nickname} 二维码已存在，跳过请求")
                 return
 
-            # 请求 qrcode_url 接口，重试2次
-            max_retries = 2
+            # 请求 qrcode_url 接口，获取用户信息，重试2次
+            max_retries = 3
             retry_count = 0
             qr_data = None
             while retry_count <= max_retries and qr_data is None:
@@ -722,19 +748,21 @@ class DouyinGUI:
                     if retry_count <= max_retries:
                         self.log(
                             f"[qrcode_url] 请求失败 sec_uid={sec_uid}，重试 {retry_count}/{max_retries}: {e}")
+                        time.sleep(2)
                     else:
                         self.log(
                             f"[qrcode_url] 请求失败 sec_uid={sec_uid}，已重试 {max_retries} 次: {e}")
                         return
-            
+
             if qr_data is None:
                 return
-            
+
             # 从 qrcode_url 接口获取完整的 nickname
-            full_nickname = qr_data.get("user", {}).get("nickname") if isinstance(qr_data, dict) else None
+            full_nickname = qr_data.get("user", {}).get(
+                "nickname") if isinstance(qr_data, dict) else None
             # 如果获取不到，则使用原来的 nickname 作为后备
             display_nickname = full_nickname or nickname or "unknown"
-            
+
             share_info = qr_data.get("user", {}).get(
                 "share_info", {}) if isinstance(qr_data, dict) else {}
             qr_obj = share_info.get("share_qrcode_url", {}) if isinstance(
