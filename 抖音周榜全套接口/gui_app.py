@@ -22,6 +22,7 @@ python gui_app.py
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 import requests
 import base64
 import os
@@ -413,6 +414,7 @@ class DouyinGUI:
                         if retry_count <= max_retries:
                             self.log(
                                 f"[保存失败] rank={rank} nickname={nickname} URL下载失败，重试 {retry_count}/{max_retries}: {e}")
+                            time.sleep(5)
                         else:
                             self.log(
                                 f"[保存失败] rank={rank} nickname={nickname} URL下载失败，已重试 {max_retries} 次: {e}")
