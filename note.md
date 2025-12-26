@@ -12,6 +12,18 @@ https://www.douyin.com/user/MS4wLjABAAAA4lcWKiQ638CJ8-u-Vb-lfwVrpqqcKvQDY9njm8Ce
 
 
 
+python -m nuitka --standalone ^
+                 --windows-console-mode=disable ^
+                 --enable-plugin=tk-inter ^
+                 --include-package-data=pywin32_system32 ^
+                 --include-data-file=logo.ico=logo.ico ^
+                 --windows-icon-from-ico=logo.ico ^
+                 --output-dir=build ^
+                 --output-filename=DY周榜 ^
+                 gui_app.py
+
+
+
 
 
 王小团cookie

@@ -1,0 +1,10 @@
+*.apk
+*.exe
+*.rar
+*.zip
+*.spec
+/build/
+/dist/
+/抖音周榜全套接口/dist/
+/抖音周榜全套接口/build/
+/蝙蝠群强制加人/

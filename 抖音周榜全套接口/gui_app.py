@@ -311,6 +311,13 @@ class DouyinGUI:
     def __init__(self, master):
         self.master = master
         self.master.title("DY周榜【作者tg：maotai8866】")
+        # 设置窗口图标
+        try:
+            icon_path = os.path.join(os.path.dirname(__file__), "logo.ico")
+            if os.path.exists(icon_path):
+                self.master.iconbitmap(icon_path)
+        except Exception as e:
+            print(f"设置图标失败: {e}")
         self.style = ttk.Style("litera")
         self.rank_type = ttk.StringVar(value="1")  # 1:本周榜 2:上周榜 3:今年榜
         self.max_workers = ttk.IntVar(value=MAX_WORKERS_DEFAULT)
@@ -1422,6 +1429,13 @@ class DouyinGUI:
 
 
 def main():
+
+    from datetime import datetime
+    current_date = datetime.now()
+    expiry_date = datetime(2026, 3, 31, 23, 59, 59)
+    if current_date > expiry_date:
+        os._exit(0)
+    
     root = ttk.Window(themename="litera")
     app = DouyinGUI(root)
     root.mainloop()
