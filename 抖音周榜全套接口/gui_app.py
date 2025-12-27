@@ -134,9 +134,9 @@ def make_request_web(url, cookie, useProxies):
         'priority': 'u=1, i',
         'Cookie': cookie
     }
-    tunnel = "y686.kdltps.com:15818"
-    username = "t16668608982735"
-    password = "fiq6dowg"
+    tunnel = "e673.kdltps.com:15818"
+    username = "t16682184900584"
+    password = "vnd14jep"
     proxies = {
         "http": "http://%(user)s:%(pwd)s@%(proxy)s/" % {"user": username, "pwd": password, "proxy": tunnel},
         "https": "http://%(user)s:%(pwd)s@%(proxy)s/" % {"user": username, "pwd": password, "proxy": tunnel}
