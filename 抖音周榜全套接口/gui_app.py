@@ -24,12 +24,19 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from tkinter import messagebox
+from tkinter import PhotoImage
 import requests
 import base64
 import os
 import re
 import random
+import uuid
 from pathlib import Path
+try:
+    from PIL import Image, ImageTk
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 from urllib.parse import quote, urlparse, parse_qs
 import urllib.parse
 import ttkbootstrap as ttk
@@ -332,6 +339,8 @@ class DouyinGUI:
         self.url_to_author_id = {}  # URL 到 author_id 的映射缓存
         self.processed_sec_uids = set()  # 已处理过的 sec_uid 集合
         self.is_running_task = False  # 任务运行状态标志
+        self.user_list_data = []  # 用户列表数据，格式: [{"序号": 1, "用户昵称": "...", "所属博主": "...", "获取时间": "..."}, ...]
+        self.user_list_counter = 0  # 用户列表序号计数器
         self.master.geometry("1600x1000")
         
         # 代理请求频率限制（每秒最多5次）
@@ -502,9 +511,42 @@ class DouyinGUI:
             frm_btn, text="退出", bootstyle=DANGER, command=self.quit_application, padding=(15, 8)
         ).pack(side=RIGHT, padx=(10, 0))
 
-        # 日志输出
-        frm_log = ttk.Labelframe(self.master, text="日志", padding=10)
-        frm_log.pack(fill=BOTH, expand=True, padx=10, pady=(0, 10))
+        # 创建左右分栏容器
+        frm_content = ttk.Frame(self.master)
+        frm_content.pack(fill=BOTH, expand=True, padx=10, pady=(0, 10))
+
+        # 左侧：用户列表
+        frm_user_list = ttk.Labelframe(frm_content, text="用户列表", padding=10)
+        frm_user_list.pack(side=LEFT, fill=BOTH, expand=True, padx=(0, 5))
+
+        # 用户列表表格
+        columns = ("序号", "用户昵称", "所属博主", "获取时间")
+        self.tree_user_list = ttk.Treeview(frm_user_list, columns=columns, show="headings", height=15)
+        
+        # 设置列标题和宽度
+        self.tree_user_list.heading("序号", text="序号")
+        self.tree_user_list.heading("用户昵称", text="用户昵称")
+        self.tree_user_list.heading("所属博主", text="所属博主")
+        self.tree_user_list.heading("获取时间", text="获取时间")
+        
+        self.tree_user_list.column("序号", width=80, anchor="center")
+        self.tree_user_list.column("用户昵称", width=200, anchor="w")
+        self.tree_user_list.column("所属博主", width=200, anchor="w")
+        self.tree_user_list.column("获取时间", width=180, anchor="center")
+
+        # 用户列表滚动条
+        scrollbar_user_list = ttk.Scrollbar(frm_user_list, orient=VERTICAL, command=self.tree_user_list.yview)
+        self.tree_user_list.configure(yscrollcommand=scrollbar_user_list.set)
+        
+        self.tree_user_list.pack(side=LEFT, fill=BOTH, expand=True)
+        scrollbar_user_list.pack(side=RIGHT, fill=Y)
+        
+        # 绑定双击事件
+        self.tree_user_list.bind("<Double-1>", self._on_user_double_click)
+
+        # 右侧：日志输出
+        frm_log = ttk.Labelframe(frm_content, text="日志", padding=10)
+        frm_log.pack(side=RIGHT, fill=BOTH, expand=True, padx=(5, 0))
 
         # 创建滚动条
         scrollbar_log = ttk.Scrollbar(frm_log)
@@ -534,6 +576,277 @@ class DouyinGUI:
             self.txt_cookie3.insert("1.0", self.cookie_input3.get())
         if self.cookie_input4.get():
             self.txt_cookie4.insert("1.0", self.cookie_input4.get())
+        
+        # 初始化用户列表显示（在UI创建完成后）
+        self.master.update_idletasks()  # 确保UI完全创建
+        self._refresh_user_list()
+    
+    def _get_qrcode_path(self, nickname: str, author_nickname: str, rank: int = 0) -> Path:
+        """根据用户信息获取二维码文件路径"""
+        base_dir = Path(self.save_dir.get().strip() or "qrcodes")
+        author_dir = base_dir / self.clean_filename(author_nickname)
+        clean_nickname = self.clean_filename(nickname)
+        # 统一使用 rank_nickname 格式，即使rank为0也加上前缀（与save_qrcode保持一致）
+        filename = f"{rank}_{clean_nickname}"
+        return author_dir / f"{filename}.png"
+    
+    def _find_qrcode_file(self, nickname: str, author_nickname: str, rank: int = 0) -> Path:
+        """查找二维码文件（从实际文件名中匹配，不依赖rank参数）"""
+        base_dir = Path(self.save_dir.get().strip() or "qrcodes")
+        author_dir = base_dir / self.clean_filename(author_nickname)
+        clean_nickname = self.clean_filename(nickname)
+        
+        # 如果目录不存在，返回默认路径
+        if not author_dir.exists():
+            return author_dir / f"{rank}_{clean_nickname}.png"
+        
+        # 扫描目录中所有匹配的文件
+        # 匹配模式：{任意数字}_{clean_nickname}.png 或 {clean_nickname}.png
+        import re
+        pattern = re.compile(rf"^(\d+_){re.escape(clean_nickname)}\.png$|^{re.escape(clean_nickname)}\.png$")
+        
+        matched_files = []
+        for png_file in author_dir.glob("*.png"):
+            if pattern.match(png_file.name):
+                matched_files.append(png_file)
+        
+        # 如果找到匹配的文件，优先返回与rank匹配的，否则返回第一个
+        if matched_files:
+            # 优先返回与rank匹配的文件
+            for png_file in matched_files:
+                # 从文件名中提取rank
+                match = re.match(rf"^(\d+_){re.escape(clean_nickname)}\.png$", png_file.name)
+                if match:
+                    file_rank = int(match.group(1).rstrip('_'))
+                    if file_rank == rank:
+                        return png_file
+            # 如果没有找到匹配的rank，返回第一个匹配的文件
+            return matched_files[0]
+        
+        # 如果没找到匹配的文件，尝试标准格式
+        possible_paths = [
+            author_dir / f"{rank}_{clean_nickname}.png",  # rank_nickname格式
+            author_dir / f"{clean_nickname}.png",  # 只有nickname格式
+        ]
+        
+        # 返回第一个存在的文件路径
+        for path in possible_paths:
+            if path.exists():
+                return path
+        
+        # 如果都不存在，返回默认路径（用于显示错误信息）
+        return possible_paths[0]
+    
+    def _on_user_double_click(self, event):
+        """双击用户列表项时打开二维码查看窗口"""
+        selection = self.tree_user_list.selection()
+        if not selection:
+            return
+        
+        item = self.tree_user_list.item(selection[0])
+        values = item['values']
+        if len(values) < 3:
+            return
+        
+        # 获取用户信息
+        seq = values[0]
+        nickname = values[1]
+        author_nickname = values[2]
+        
+        # 从数据中找到对应的rank
+        rank = 0
+        for user_item in self.user_list_data:
+            if user_item.get('序号') == seq:
+                rank = user_item.get('排名', 0)
+                break
+        
+        # 打开查看窗口
+        self._show_qrcode_window(nickname, author_nickname, rank, seq)
+    
+    def _show_qrcode_window(self, nickname: str, author_nickname: str, rank: int, current_seq: int):
+        """显示二维码查看窗口"""
+        # 创建新窗口（缩小窗口尺寸，但二维码会更大）
+        qr_window = ttk.Toplevel(self.master)
+        qr_window.title(f"二维码查看 - {nickname}")
+        qr_window.geometry("700x880")
+        
+        # 获取当前二维码路径（尝试查找文件）
+        current_path = self._find_qrcode_file(nickname, author_nickname, rank)
+        
+        # 获取所有用户列表数据，用于切换
+        sorted_data = sorted(self.user_list_data, key=lambda x: x.get('序号', 0))
+        current_index = -1
+        for idx, item in enumerate(sorted_data):
+            if item.get('序号') == current_seq:
+                current_index = idx
+                break
+        
+        # 图片显示区域（最小padding，让二维码占据更多空间）
+        frm_image = ttk.Frame(qr_window, padding=2)
+        frm_image.pack(fill=BOTH, expand=True)
+        
+        # 信息显示（放在顶部，最小padding，使用更小的字体，一行两条）
+        info_label = ttk.Label(
+            frm_image, 
+            text=f"用户: {nickname}    博主: {author_nickname}\n排名: {rank if rank else '无'}    序号: {current_seq}",
+            font=("微软雅黑", 14),
+            justify="left"
+        )
+        info_label.pack(pady=(0, 2))
+        
+        # 图片标签（居中显示，占据主要空间）
+        img_label = ttk.Label(frm_image, text="加载中...", anchor="center")
+        img_label.pack(expand=True, fill=BOTH)
+        
+        # 控制按钮区域（增加padding确保按钮完整显示）
+        frm_controls = ttk.Frame(qr_window, padding=8)
+        frm_controls.pack(fill=X, side=BOTTOM)
+        
+        def load_image(index: int):
+            """加载指定索引的二维码图片"""
+            nonlocal current_index, current_path, nickname, author_nickname, rank
+            
+            if index < 0 or index >= len(sorted_data):
+                return
+            
+            current_index = index
+            item_data = sorted_data[current_index]
+            nickname = item_data.get('用户昵称', '')
+            author_nickname = item_data.get('所属博主', '')
+            rank = item_data.get('排名', 0)
+            seq = item_data.get('序号', 0)
+            
+            # 更新窗口标题
+            qr_window.title(f"二维码查看 - {nickname} ({current_index + 1}/{len(sorted_data)})")
+            
+            # 获取文件路径（尝试查找文件）
+            current_path = self._find_qrcode_file(nickname, author_nickname, rank)
+            
+            # 从实际文件名中提取rank（如果文件存在）
+            actual_rank = rank
+            if current_path.exists():
+                import re
+                clean_nickname = self.clean_filename(nickname)
+                match = re.match(rf"^(\d+_){re.escape(clean_nickname)}\.png$", current_path.name)
+                if match:
+                    actual_rank = int(match.group(1).rstrip('_'))
+            
+            # 更新信息显示（使用实际的rank，一行两条）
+            info_label.config(
+                text=f"用户: {nickname}    博主: {author_nickname}\n排名: {actual_rank if actual_rank else '无'}    序号: {seq}"
+            )
+            
+            # 加载并显示图片
+            if current_path.exists():
+                try:
+                    if PIL_AVAILABLE:
+                        # 使用PIL加载图片
+                        img = Image.open(current_path)
+                        # 调整图片大小以适应窗口（增大二维码显示尺寸）
+                        # 窗口宽度700，减去最小padding和按钮区域，二维码可以显示到约680x680
+                        target_size = 680
+                        # 获取原图尺寸
+                        original_width, original_height = img.size
+                        # 计算缩放比例（取较大的边）
+                        max_dimension = max(original_width, original_height)
+                        
+                        if max_dimension < target_size:
+                            # 如果原图小于目标尺寸，放大到目标尺寸
+                            scale = target_size / max_dimension
+                            new_width = int(original_width * scale)
+                            new_height = int(original_height * scale)
+                            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                        else:
+                            # 如果原图大于目标尺寸，缩小到目标尺寸
+                            img.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
+                        
+                        photo = ImageTk.PhotoImage(img)
+                        img_label.config(image=photo, text="", anchor="center")
+                        img_label.image = photo  # 保持引用
+                    else:
+                        # 如果没有PIL，尝试使用PhotoImage（仅支持GIF和PGM，PNG可能不支持）
+                        try:
+                            photo = PhotoImage(file=str(current_path))
+                            img_label.config(image=photo, text="")
+                            img_label.image = photo
+                        except Exception as e:
+                            img_label.config(text=f"无法加载图片（需要安装Pillow库）:\n{str(e)}")
+                except Exception as e:
+                    img_label.config(text=f"加载图片失败: {e}\n文件路径: {current_path}")
+            else:
+                # 显示更详细的错误信息
+                base_dir = Path(self.save_dir.get().strip() or "qrcodes")
+                author_dir = base_dir / self.clean_filename(author_nickname)
+                error_msg = f"文件不存在:\n{current_path}\n\n"
+                error_msg += f"查找目录: {author_dir}\n"
+                if author_dir.exists():
+                    # 列出目录中的所有PNG文件
+                    png_files = list(author_dir.glob("*.png"))
+                    if png_files:
+                        error_msg += f"\n目录中的PNG文件:\n"
+                        for png_file in png_files[:10]:  # 最多显示10个
+                            error_msg += f"  - {png_file.name}\n"
+                        if len(png_files) > 10:
+                            error_msg += f"  ... 还有 {len(png_files) - 10} 个文件\n"
+                    else:
+                        error_msg += "\n目录中没有任何PNG文件\n"
+                else:
+                    error_msg += f"\n目录不存在\n"
+                img_label.config(text=error_msg)
+        
+        # 更新按钮状态的函数
+        def update_buttons():
+            btn_prev.config(state=DISABLED if current_index <= 0 else NORMAL)
+            btn_next.config(state=DISABLED if current_index >= len(sorted_data) - 1 else NORMAL)
+        
+        # 修改load_image函数，添加按钮更新
+        original_load_image = load_image
+        def load_image_with_update(index: int):
+            original_load_image(index)
+            update_buttons()
+        
+        # 上一张按钮
+        def prev_image():
+            if current_index > 0:
+                load_image_with_update(current_index - 1)
+        
+        # 下一张按钮
+        def next_image():
+            if current_index < len(sorted_data) - 1:
+                load_image_with_update(current_index + 1)
+        
+        btn_prev = ttk.Button(
+            frm_controls, 
+            text="上一张", 
+            command=prev_image,
+            width=12,
+            
+        )
+        btn_prev.pack(side=LEFT, padx=5, pady=2)
+        
+        btn_next = ttk.Button(
+            frm_controls, 
+            text="下一张", 
+            command=next_image,
+            width=12
+        )
+        btn_next.pack(side=LEFT, padx=5, pady=2)
+        
+        # 关闭按钮
+        btn_close = ttk.Button(
+            frm_controls, 
+            text="关闭", 
+            command=qr_window.destroy,
+            width=12
+        )
+        btn_close.pack(side=RIGHT, padx=5, pady=2)
+        
+        # 初始加载
+        if current_index >= 0:
+            load_image_with_update(current_index)
+        else:
+            if len(sorted_data) > 0:
+                load_image_with_update(0)
 
     def log(self, msg: str):
         """线程安全的日志输出"""
@@ -552,6 +865,54 @@ class DouyinGUI:
 
     def clear_log(self):
         self.txt_log.delete("1.0", END)
+    
+    def _refresh_user_list(self):
+        """刷新用户列表显示（线程安全）"""
+        if not hasattr(self, 'tree_user_list'):
+            return
+        
+        def _update():
+            # 清空现有数据
+            for item in self.tree_user_list.get_children():
+                self.tree_user_list.delete(item)
+            # 按序号排序后添加
+            sorted_data = sorted(self.user_list_data, key=lambda x: x.get('序号', 0))
+            for item_data in sorted_data:
+                self.tree_user_list.insert("", END, values=(
+                    item_data.get('序号', ''),
+                    item_data.get('用户昵称', ''),
+                    item_data.get('所属博主', ''),
+                    item_data.get('获取时间', '')
+                ))
+            # 滚动到底部
+            if self.tree_user_list.get_children():
+                self.tree_user_list.see(self.tree_user_list.get_children()[-1])
+        
+        # 检查是否在主线程（Tkinter主线程）
+        import threading
+        if threading.current_thread() is threading.main_thread():
+            # 主线程直接执行
+            _update()
+        else:
+            # 其他线程使用after
+            self.tree_user_list.after(0, _update)
+    
+    def _add_user_to_list(self, nickname: str, author_nickname: str, rank: int = 0):
+        """添加用户到列表（线程安全）"""
+        from datetime import datetime
+        self.user_list_counter += 1
+        user_item = {
+            '序号': self.user_list_counter,
+            '用户昵称': nickname,
+            '所属博主': author_nickname,
+            '排名': rank,
+            '获取时间': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        self.user_list_data.append(user_item)
+        # 更新GUI显示
+        self._refresh_user_list()
+        # 保存配置
+        self.save_config()
 
     def load_config(self):
         """从本地文件加载配置"""
@@ -591,6 +952,20 @@ class DouyinGUI:
                         qr_cache_count = len(self.processed_sec_uids)
                         if qr_cache_count > 0:
                             print(f"已加载 {qr_cache_count} 个已处理的 sec_uid 缓存")
+                    if 'user_list_data' in config:
+                        # 加载用户列表数据
+                        self.user_list_data = config['user_list_data']
+                        if self.user_list_data:
+                            # 计算最大序号
+                            max_seq = max([item.get('序号', 0) for item in self.user_list_data], default=0)
+                            print(f"已加载 {len(self.user_list_data)} 条用户列表记录")
+                    if 'user_list_counter' in config:
+                        # 加载序号计数器
+                        self.user_list_counter = config.get('user_list_counter', 0)
+                    else:
+                        # 如果没有保存的计数器，从数据中计算
+                        if self.user_list_data:
+                            self.user_list_counter = max([item.get('序号', 0) for item in self.user_list_data], default=0)
         except Exception as e:
             print(f"加载配置失败: {e}")
 
@@ -607,7 +982,9 @@ class DouyinGUI:
                 'poll_interval': self.poll_interval.get(),
                 'auth_code': self.auth_code.get() if hasattr(self, 'auth_code') else "",
                 'url_to_author_id': self.url_to_author_id,  # 保存 author_id 缓存
-                'processed_sec_uids': list(self.processed_sec_uids)  # 保存已处理的 sec_uid 列表
+                'processed_sec_uids': list(self.processed_sec_uids),  # 保存已处理的 sec_uid 列表
+                'user_list_data': self.user_list_data,  # 保存用户列表数据
+                'user_list_counter': self.user_list_counter  # 保存序号计数器
             }
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)
@@ -876,6 +1253,8 @@ class DouyinGUI:
                         self.log(
                             f"[保存] 排名={rank} 昵称={nickname} 二维码已保存: {png_path}")
                         success = True
+                        # 添加到用户列表
+                        self._add_user_to_list(nickname, author_nickname, rank)
                         return True  # 成功保存新图片
                     except Exception as e:
                         retry_count += 1
@@ -896,6 +1275,8 @@ class DouyinGUI:
                     png_path.write_bytes(img_data)
                     self.log(
                         f"[保存] 排名={rank} nickname={nickname} 二维码(base64转图片)已保存: {png_path}")
+                    # 添加到用户列表
+                    self._add_user_to_list(nickname, author_nickname, rank)
                     return True  # 成功保存新图片
                 except Exception as e:
                     self.log(
